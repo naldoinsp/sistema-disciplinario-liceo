@@ -315,12 +315,38 @@
 
         async function initFirebase() {
             try {
-                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+                // Configuración de Firebase: ¡REEMPLAZA ESTE OBJETO CON TU CONFIGURACIÓN REAL DE LA CONSOLA DE FIREBASE!
+                const realFirebaseConfig = {
+                    apiKey: "TU_API_KEY_AQUI", // REEMPLAZAR
+                    authDomain: "TU_AUTH_DOMAIN_AQUI", // REEMPLAZAR
+                    projectId: "TU_PROJECT_ID_AQUI", // REEMPLAZAR
+                    storageBucket: "TU_STORAGE_BUCKET_AQUI", // REEMPLAZAR
+                    messagingSenderId: "TU_MESSAGING_SENDER_ID_AQUI", // REEMPLAZAR
+                    appId: "TU_APP_ID_AQUI" // REEMPLAZAR
+                };
+                
+                // Usamos la configuración real si no estamos en el entorno de Canvas.
+                let firebaseConfig;
+                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+                if (initialAuthToken) {
+                    // Si estamos en Canvas, usamos la configuración del entorno para el auth
+                    firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : realFirebaseConfig;
+                } else {
+                    // Si estamos en un Hosting público (como GitHub Pages), usamos la configuración real
+                    firebaseConfig = realFirebaseConfig;
+                }
+                
+                // Si la apiKey es todavía 'TU_API_KEY_AQUI', mostramos un error para que el usuario sepa que tiene que editar el archivo.
+                if (firebaseConfig.apiKey === "TU_API_KEY_AQUI") {
+                     throw new Error("API Key no configurada. Por favor, edita el archivo index.html con tu configuración real de Firebase.");
+                }
+
+
                 const app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
                 
-                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
                 
                 if (initialAuthToken) {
                     await signInWithCustomToken(auth, initialAuthToken);
@@ -333,6 +359,9 @@
 
                 document.getElementById('user-id-display').textContent = userId;
                 document.getElementById('btn-registrar').disabled = false;
+                document.getElementById('status-message').textContent = 'Conexión exitosa. Listo para registrar.';
+                document.getElementById('status-message').classList.remove('text-red-600');
+                document.getElementById('status-message').classList.add('text-green-600');
                 
                 console.log("Firebase inicializado y autenticado. User ID:", userId);
                 
@@ -343,6 +372,9 @@
             } catch (error) {
                 console.error("Error al inicializar Firebase o autenticar:", error);
                 document.getElementById('status-message').textContent = `Error de conexión: ${error.message}`;
+                document.getElementById('status-message').classList.remove('text-green-600');
+                document.getElementById('status-message').classList.add('text-red-600');
+                document.getElementById('btn-registrar').disabled = true;
             }
         }
 
