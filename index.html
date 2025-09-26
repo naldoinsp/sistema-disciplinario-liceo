@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro Disciplinario - Estilo Forms</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, serverTimestamp, setDoc, doc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Variables globales para ser usadas en el script principal
+        window.initializeApp = initializeApp;
+        window.getAuth = getAuth;
+        window.signInWithCustomToken = signInWithCustomToken;
+        window.signInAnonymously = signInAnonymously;
+        window.getFirestore = getFirestore;
+        window.collection = collection;
+        window.addDoc = addDoc;
+        window.query = query;
+        window.onSnapshot = onSnapshot;
+        window.serverTimestamp = serverTimestamp;
+        window.setDoc = setDoc;
+        window.doc = doc;
+        window.getDocs = getDocs;
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f3f7; /* Fondo gris claro, similar a Google Forms */
+        }
+        .form-container {
+            max-width: 700px; /* Ancho típico de un formulario */
+            margin: 2rem auto;
+            padding: 1rem;
+        }
+        .form-header {
+            background-color: #5b21b6; /* Morado fuerte */
+            height: 10px;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+        }
+        .form-card {
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+        .btn-form-submit {
+            background-color: #5b21b6;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+        .btn-form-submit:hover {
+            background-color: #4c1d95;
+        }
+        .input-form {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            transition: border-color 0.3s;
+            font-size: 16px;
+        }
+        .input-form:focus {
+            outline: none;
+            border-color: #5b21b6;
+            box-shadow: 0 0 0 1px #5b21b6;
+        }
+        .required-indicator {
+            color: #ef4444; /* Rojo para asterisco */
+        }
+        .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="form-container">
+
+        <!-- TÍTULO PRINCIPAL ESTILO GOOGLE FORMS -->
+        <div class="form-card mb-4 p-6 border-t-8 border-[#5b21b6]">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Registro de Incidencias Disciplinarias</h1>
+            <p class="text-gray-500 mb-4">Liceo Naval del Ecuador - Manual de Buenas Prácticas</p>
+            <hr>
+            <p id="status-message" class="mt-4 text-sm text-green-600 font-semibold"></p>
+            <p class="mt-2 text-xs text-gray-500">
+                <span class="font-semibold">ID Inspector:</span> 
+                <span id="user-id-display" class="font-mono">Cargando...</span>
+            </p>
+        </div>
+
+
+        <!-- SECCIÓN 1: REGISTRO DE NUEVA FALTA (EL FORMULARIO) -->
+        <form id="registro-falta-form" onsubmit="event.preventDefault(); registrarFalta();">
+
+            <!-- Card 1: Cadete -->
+            <div class="form-card">
+                <label for="cadete-nombre" class="block text-lg font-medium text-gray-700 mb-4">
+                    Nombre del Cadete <span class="required-indicator">*</span>
+                </label>
+                <input type="text" id="cadete-nombre" list="cadetes-list" placeholder="Ej: Cadete Juan Pérez - 10mo A" class="input-form">
+                <datalist id="cadetes-list">
+                    <!-- Opciones de cadetes existentes se llenarán aquí -->
+                </datalist>
+            </div>
+            
+            <!-- Card 2: Falta y Demérito -->
+            <div class="form-card">
+                <label for="falta-select" class="block text-lg font-medium text-gray-700 mb-4">
+                    Seleccione el Literal de la Falta <span class="required-indicator">*</span>
+                </label>
+                <select id="falta-select" class="input-form" onchange="actualizarDemerito()">
+                    <option value="" disabled selected>--- Seleccionar una falta ---</option>
+                    <!-- Las opciones se llenarán mediante JavaScript -->
+                </select>
+
+                <!-- Resultados de la Falta Seleccionada -->
+                <div id="resultado-container" class="mt-6 p-4 border-l-4 border-gray-400 bg-gray-50 rounded-r-lg hidden">
+                    <h3 class="text-lg font-bold text-gray-700 mb-2">Detalle:</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+                        <div class="col-span-1">
+                            <span class="font-semibold text-gray-600">Categoría:</span> 
+                            <span id="categoria-output" class="text-gray-900 font-medium"></span>
+                        </div>
+                        <div class="col-span-1">
+                            <span class="font-semibold text-gray-600">Literal:</span> 
+                            <span id="literal-output" class="text-gray-900 font-medium"></span>
+                        </div>
+                        <!-- Ponderación -->
+                        <div class="col-span-1">
+                            <p class="font-semibold text-gray-600">Deméritos:</p>
+                            <p id="demeritos-output" class="text-2xl font-extrabold"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 3: Fecha y Hora -->
+            <div class="form-card">
+                <label class="block text-lg font-medium text-gray-700 mb-4">
+                    Fecha y Hora de Ocurrencia <span class="required-indicator">*</span>
+                </label>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="falta-fecha" class="block text-sm font-normal text-gray-600 mb-1">Fecha:</label>
+                        <input type="date" id="falta-fecha" class="input-form">
+                    </div>
+                    <div>
+                        <label for="falta-hora" class="block text-sm font-normal text-gray-600 mb-1">Hora:</label>
+                        <input type="time" id="falta-hora" class="input-form">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Card 4: Informe -->
+            <div class="form-card">
+                <label for="informe-falta" class="block text-lg font-medium text-gray-700 mb-4">
+                    Informe Detallado <span class="required-indicator">*</span>
+                </label>
+                <textarea id="informe-falta" rows="3" placeholder="Describa brevemente el contexto, detalles y testigos de la falta." class="input-form"></textarea>
+            </div>
+
+            <!-- Botón de Envío -->
+            <div class="mt-6 flex justify-end">
+                <button type="submit" id="btn-registrar" class="btn-form-submit disabled:opacity-50" disabled>
+                    Registrar Incidencia
+                </button>
+            </div>
+        </form>
+
+        <!-- Secciones de Visualización (Fuera del Formulario) -->
+        
+        <!-- SECCIÓN DE CÁLCULO DE TOTALES (BASE DE DATOS DE CADETES) -->
+        <div class="form-card mt-8">
+            <h3 class="text-xl font-bold text-[#5b21b6] mb-4 border-b pb-2">Base de Datos de Cadetes (Totales Acumulados)</h3>
+            <div id="totales-resumen" class="space-y-4">
+                <div id="totales-loading" class="text-center text-gray-500 py-4">Calculando totales...</div>
+                <div class="table-responsive">
+                    <table class="w-full text-sm text-left text-gray-500 rounded-lg overflow-hidden">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-3 py-2">Cadete</th>
+                                <th scope="col" class="px-3 py-2 text-center">Faltas Reg.</th>
+                                <th scope="col" class="px-3 py-2 text-center font-extrabold text-red-700">TOTAL DEMÉRITOS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="totales-table-body">
+                            <!-- Los totales se llenarán mediante JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <p id="totales-status" class="text-sm text-gray-600 mt-2">Los totales se actualizan en tiempo real.</p>
+            </div>
+        </div>
+
+        <!-- SECCIÓN DE HISTORIAL DETALLADO -->
+        <div class="form-card mt-8">
+             <h3 class="text-xl font-bold text-[#5b21b6] mb-4 border-b pb-2">Historial Detallado de Faltas</h3>
+             <div id="loading-message" class="text-center text-gray-500 py-4">Cargando historial...</div>
+             <div class="table-responsive">
+                <table class="w-full text-sm text-left text-gray-500 rounded-lg overflow-hidden">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-2">Cadete</th>
+                            <th scope="col" class="px-3 py-2">Falta (Lit)</th>
+                            <th scope="col" class="px-3 py-2">Deméritos</th>
+                            <th scope="col" class="px-3 py-2">Informe</th>
+                            <th scope="col" class="px-3 py-2">Fecha y Hora</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historial-table-body">
+                        <!-- Los registros se llenarán mediante JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let db;
+        let auth;
+        let userId = 'default-user';
+        let isAuthReady = false;
+        let cadetesCache = []; 
+        
+        // Base de datos de faltas (misma estructura que antes)
+        const faltasData = [
+            // 1. Fraude y Deshonestidad Académica
+            { categoria: 'Fraude Académico', literal: 'A', descripcion: 'Plagio de frases (sin reconocer la fuente)', demeritos: 15 },
+            { categoria: 'Fraude Académico', literal: 'B', descripcion: 'Plagio de ideas/datos (sin reconocer la fuente, aun parafraseado)', demeritos: 15 },
+            { categoria: 'Fraude Académico', literal: 'C', descripcion: 'Presentar el mismo trabajo en dos o más ocasiones sin autorización', demeritos: 20 },
+            { categoria: 'Fraude Académico', literal: 'D', descripcion: 'Copiar o permitir que alguien copie del propio trabajo', demeritos: 20 },
+            { categoria: 'Fraude Académico', literal: 'E', descripcion: 'Utilizar notas o materiales de consulta no permitidos', demeritos: 20 },
+            { categoria: 'Fraude Académico', literal: 'F', descripcion: 'Incluir el nombre de una persona que no participó en un trabajo grupal', demeritos: 20 },
+            { categoria: 'Fraude Académico', literal: 'G', descripcion: 'Interferir en el trabajo de otros (sabotaje, robo de materiales)', demeritos: 20 },
+            { categoria: 'Fraude Académico', literal: 'H', descripcion: 'Obtener dolosamente copias de exámenes o sus respuestas', demeritos: 20 },
+            { categoria: 'Fraude Académico', literal: 'I', descripcion: 'Modificar calificaciones o falsificar documentos/expedientes', demeritos: 20 },
+            { categoria: 'Fraude Académico', literal: 'J', descripcion: 'Suplantar o permitir ser suplantado en una evaluación', demeritos: 20 },
+
+            // 2. Disciplina y Convivencia (Generales)
+            { categoria: 'Disciplina Leve', literal: 'A', descripcion: 'Hablar, moverse, comer, reírse en formación o ceremonia', demeritos: 1 },
+            { categoria: 'Disciplina Leve', literal: 'B', descripcion: 'Inobservar obligaciones y cargos asignados (brigadier, semanero)', demeritos: 1 },
+            { categoria: 'Disciplina Leve', literal: 'C', descripcion: 'Ingerir alimentos en horas de clase y dentro del aula', demeritos: 1 },
+            { categoria: 'Disciplina Leve', literal: 'D', descripcion: 'Realizar actividad que no responda a la planificación de la clase', demeritos: 1 },
+            { categoria: 'Aseo/Uniforme', literal: 'E', descripcion: 'Mala revista de aseo y presentación personal (cabello/uñas)', demeritos: 2 },
+            { categoria: 'Aseo/Uniforme', literal: 'F', descripcion: 'Mala revista de uniforme (sucio, incompleto, insignias faltantes)', demeritos: 2 },
+            { categoria: 'Disciplina Leve', literal: 'G', descripcion: 'Usar dispositivos electrónicos sin permiso', demeritos: 2 },
+            { categoria: 'Disciplina Leve', literal: 'H', descripcion: 'Dormir en el aula o en cualquier sitio de la U.E.', demeritos: 2 },
+            { categoria: 'Disciplina Leve', literal: 'J', descripcion: 'Incumplir disposición emitida mediante circulares', demeritos: 2 },
+            { categoria: 'Aseo/Uniforme', literal: 'K', descripcion: 'Usar prendas ajenas al uniforme', demeritos: 2 },
+            { categoria: 'Aseo/Uniforme', literal: 'L', descripcion: 'Usar uniforme no correspondiente al horario escolar', demeritos: 3 },
+            { categoria: 'Disciplina Media', literal: 'M', descripcion: 'Comercializar alimentos, dulces o bebidas no alcohólicas', demeritos: 3 },
+            { categoria: 'Disciplina Media', literal: 'N', descripcion: 'Mentir o faltar a la verdad', demeritos: 3 },
+            { categoria: 'Disciplina Media', literal: 'Ñ', descripcion: 'Contaminación auditiva (gritos, música, ruido excesivo)', demeritos: 3 },
+            { categoria: 'Disciplina Media', literal: 'P', descripcion: 'Ingresar en baños del otro sexo', demeritos: 5 },
+            { categoria: 'Disciplina Media', literal: 'Q', descripcion: 'Hacer demostraciones afectivas (besos, abrazos y caricias)', demeritos: 10 },
+            { categoria: 'Falta Grave', literal: 'R', descripcion: 'Portar artículos peligrosos (cuchillos, navajas, etc.)', demeritos: 20 },
+            { categoria: 'Falta Grave', literal: 'S', descripcion: 'Posesión de cigarrillo o bebidas alcohólicas', demeritos: 20 },
+            { categoria: 'Falta Grave', literal: 'T', descripcion: 'Fumar o ingerir bebidas alcohólicas dentro de la institución', demeritos: 20 },
+            { categoria: 'Falta Grave', literal: 'U', descripcion: 'Mantener relaciones de tipo sexual dentro de las instalaciones', demeritos: 20 },
+            { categoria: 'Falta Grave', literal: 'V', descripcion: 'Tomar prendas de otro cadete sin autorización (hurto)', demeritos: 20 },
+            { categoria: 'Cero Tolerancia', literal: 'W', descripcion: 'Posesión de sustancias sujetas a fiscalización', demeritos: 40 },
+            { categoria: 'Cero Tolerancia', literal: 'X', descripcion: 'Portar armas de fuego', demeritos: 40 },
+            { categoria: 'Cero Tolerancia', literal: 'Y', descripcion: 'Menoscabar la imagen institucional', demeritos: 40 },
+
+            // 3. Deterioro o Destrucción de Instalaciones
+            { categoria: 'Daño Propiedad Leve', literal: 'A', descripcion: 'Ser descuidado con los implementos del aula/equipos deportivos', demeritos: 1 },
+            { categoria: 'Daño Propiedad Leve', literal: 'B', descripcion: 'Tirar basura en lugares no designados', demeritos: 2 },
+            { categoria: 'Daño Propiedad Media', literal: 'C', descripcion: 'Descuidar equipos y materiales de la Unidad Educativa', demeritos: 5 },
+            { categoria: 'Daño Propiedad Media', literal: 'D', descripcion: 'Destruir el ornato de la Unidad Educativa', demeritos: 10 },
+            { categoria: 'Daño Propiedad Media', literal: 'E', descripcion: 'Rayar, escribir, dibujar sobre escritorios, puertas o paredes', demeritos: 10 },
+            { categoria: 'Daño Propiedad Grave', literal: 'F', descripcion: 'Destruir pupitres, casilleros, aulas, pasillos, etc.', demeritos: 20 },
+            { categoria: 'Daño Propiedad Grave', literal: 'G', descripcion: 'Contaminar el aula de clases con productos químicos nocivos', demeritos: 20 },
+
+            // 4. Actos de Violencia
+            { categoria: 'Acto de Violencia', literal: 'A', descripcion: 'Usar frases despectivas o sobrenombres (con queja escrita)', demeritos: 20 },
+            { categoria: 'Acto de Violencia', literal: 'B', descripcion: 'Cometer actos de agresión física, psicológica, sexual y/o cyberbullying', demeritos: 20 },
+            { categoria: 'Acto de Violencia', literal: 'C', descripcion: 'Exigir, presionar o sugerir la entrega de un presente o material para beneficio', demeritos: 20 },
+            { categoria: 'Acto de Violencia', literal: 'D', descripcion: 'Cometer actos de manifiesta violencia o indisciplina contra un miembro', demeritos: 20 },
+            { categoria: 'Acto de Violencia', literal: 'E', descripcion: 'Faltar a la dignidad de un miembro de palabra o por escrito (con queja)', demeritos: 20 },
+
+            // 5. Puntualidad y Asistencia
+            { categoria: 'Puntualidad/Asistencia', literal: 'A', descripcion: 'Llegar atrasado (hasta 10 min) de manera injustificada', demeritos: 1 },
+            { categoria: 'Puntualidad/Asistencia', literal: 'B', descripcion: 'Salir del salón de clase sin autorización', demeritos: 5 },
+            { categoria: 'Puntualidad/Asistencia', literal: 'C', descripcion: 'Hacer uso del bar en horas no autorizadas', demeritos: 5 },
+            { categoria: 'Puntualidad/Asistencia', literal: 'D', descripcion: 'Evadir una formación sin justificación', demeritos: 5 },
+            { categoria: 'Puntualidad/Asistencia', literal: 'E', descripcion: 'Faltar a clases, ceremonias, actos cívicos, comisiones sin justificación', demeritos: 10 },
+            { categoria: 'Puntualidad/Asistencia', literal: 'F', descripcion: 'Salir de la institución sin autorización', demeritos: 10 },
+
+            // 6. Conflictos Escolares Leves
+            { categoria: 'Conflicto Leve', literal: 'A', descripcion: 'Interrumpir clases sin motivo (gritos, caminar, etc.)', demeritos: 5 }
+        ];
+
+        // --- RUTAS DE FIREBASE ---
+        const getAppId = () => typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const getRegistrosPath = () => `/artifacts/${getAppId()}/public/data/registros_disciplinarios`;
+        const getCadetesPath = () => `/artifacts/${getAppId()}/public/data/cadetes`; // Nueva colección para perfiles
+
+        // Función de espera
+        const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+        // --- FUNCIONES DE FIREBASE ---
+
+        async function initFirebase() {
+            try {
+                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                
+                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                userId = auth.currentUser?.uid || 'anonimo';
+                isAuthReady = true;
+
+                document.getElementById('user-id-display').textContent = userId;
+                document.getElementById('btn-registrar').disabled = false;
+                
+                console.log("Firebase inicializado y autenticado. User ID:", userId);
+                
+                // Cargar datos iniciales
+                cargarCadetes(); 
+                cargarHistorial();
+
+            } catch (error) {
+                console.error("Error al inicializar Firebase o autenticar:", error);
+                document.getElementById('status-message').textContent = `Error de conexión: ${error.message}`;
+            }
+        }
+
+        async function guardarCadete(nombre) {
+            const cadeteId = nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            const cadeteRef = doc(db, getCadetesPath(), cadeteId);
+            
+            await setDoc(cadeteRef, { nombre: nombre, ultimaActualizacion: serverTimestamp() }, { merge: true });
+        }
+        
+        async function cargarCadetes() {
+            if (!isAuthReady) return;
+
+            const cadetesList = document.getElementById('cadetes-list');
+            cadetesList.innerHTML = '';
+            cadetesCache = [];
+
+            try {
+                const snapshot = await getDocs(collection(db, getCadetesPath()));
+                snapshot.forEach(doc => {
+                    const nombre = doc.data().nombre;
+                    cadetesCache.push(nombre);
+                    const option = document.createElement('option');
+                    option.value = nombre;
+                    cadetesList.appendChild(option);
+                });
+            } catch (e) {
+                console.error("Error al cargar la lista de cadetes:", e);
+            }
+        }
+
+        async function registrarFalta() {
+            let attempts = 0;
+            while ((!db || !isAuthReady) && attempts < 10) {
+                await sleep(500);
+                attempts++;
+                if (attempts === 10) {
+                    document.getElementById('status-message').textContent = 'Error: La conexión a la base de datos no está lista. Intente recargar.';
+                    document.getElementById('status-message').classList.remove('text-green-600');
+                    document.getElementById('status-message').classList.add('text-red-600');
+                    return;
+                }
+            }
+            
+            const select = document.getElementById('falta-select');
+            const cadeteNombre = document.getElementById('cadete-nombre').value.trim();
+            const informeFalta = document.getElementById('informe-falta').value.trim();
+            const faltaFecha = document.getElementById('falta-fecha').value;
+            const faltaHora = document.getElementById('falta-hora').value;
+            const selectedIndex = select.value;
+            const statusMessage = document.getElementById('status-message');
+
+            if (!cadeteNombre || selectedIndex === "" || !informeFalta || !faltaFecha || !faltaHora) {
+                statusMessage.textContent = '¡Error! Por favor, complete todos los campos marcados con (*).';
+                statusMessage.classList.remove('text-green-600');
+                statusMessage.classList.add('text-red-600');
+                return;
+            }
+
+            const falta = faltasData[selectedIndex];
+            
+            try {
+                await guardarCadete(cadeteNombre);
+
+                const fechaRegistro = `${faltaFecha}T${faltaHora}:00`;
+
+                const registro = {
+                    cadete: cadeteNombre,
+                    falta: falta.descripcion,
+                    literal: falta.literal,
+                    categoria: falta.categoria,
+                    demeritos: falta.demeritos,
+                    informe: informeFalta,
+                    fechaOcurrencia: fechaRegistro,
+                    timestampRegistro: serverTimestamp(),
+                    registradorId: userId
+                };
+
+                await addDoc(collection(db, getRegistrosPath()), registro);
+                
+                statusMessage.textContent = `✅ Falta de ${falta.demeritos} deméritos registrada con éxito para ${cadeteNombre}.`;
+                statusMessage.classList.remove('text-red-600');
+                statusMessage.classList.add('text-green-600');
+
+                // Limpiar solo los campos del formulario
+                document.getElementById('registro-falta-form').reset();
+                document.getElementById('resultado-container').classList.add('hidden');
+                
+                // Restablecer la fecha y hora por defecto a la hora actual (para registro rápido)
+                const today = new Date();
+                const dateString = today.toISOString().split('T')[0];
+                const timeString = today.toTimeString().split(':').slice(0, 2).join(':');
+                document.getElementById('falta-fecha').value = dateString;
+                document.getElementById('falta-hora').value = timeString;
+                
+                cargarCadetes(); 
+
+            } catch (e) {
+                console.error("Error al añadir documento:", e);
+                statusMessage.textContent = 'Error al registrar la falta en la base de datos.';
+                statusMessage.classList.remove('text-green-600');
+                statusMessage.classList.add('text-red-600');
+            }
+        }
+
+        function cargarHistorial() {
+            if (!isAuthReady) return;
+
+            const historialBody = document.getElementById('historial-table-body');
+            const totalesBody = document.getElementById('totales-table-body');
+            const loadingMessage = document.getElementById('loading-message');
+            const totalesLoading = document.getElementById('totales-loading');
+
+            onSnapshot(collection(db, getRegistrosPath()), (snapshot) => {
+                loadingMessage.classList.add('hidden');
+                historialBody.innerHTML = '';
+                totalesBody.innerHTML = '';
+                totalesLoading.classList.add('hidden');
+                
+                if (snapshot.empty) {
+                    historialBody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">No hay faltas registradas aún.</td></tr>';
+                    totalesBody.innerHTML = '<tr><td colspan="3" class="p-4 text-center text-gray-400">No hay cadetes con deméritos.</td></tr>';
+                    return;
+                }
+
+                const deméritosPorCadete = {};
+                
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+
+                    // 1. Acumular deméritos
+                    if (!deméritosPorCadete[data.cadete]) {
+                        deméritosPorCadete[data.cadete] = { totalDemeritos: 0, totalFaltas: 0 };
+                    }
+                    deméritosPorCadete[data.cadete].totalDemeritos += data.demeritos;
+                    deméritosPorCadete[data.cadete].totalFaltas += 1;
+
+                    // 2. Formatear y añadir al historial detallado 
+                    let fechaHoraOcurrencia = 'N/A';
+                    if (data.fechaOcurrencia) {
+                        try {
+                            const date = new Date(data.fechaOcurrencia);
+                            fechaHoraOcurrencia = date.toLocaleString('es-EC', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+                        } catch (e) {
+                            fechaHoraOcurrencia = data.fechaOcurrencia; 
+                        }
+                    }
+                    
+                    let colorClass = 'bg-green-100 text-green-800';
+                    if (data.demeritos === 40) colorClass = 'bg-red-800 text-white font-extrabold';
+                    else if (data.demeritos >= 20) colorClass = 'bg-red-100 text-red-800 font-bold';
+                    else if (data.demeritos >= 5) colorClass = 'bg-yellow-100 text-yellow-800';
+
+                    const row = `
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">${data.cadete}</td>
+                            <td class="px-3 py-2 whitespace-nowrap">${data.falta.substring(0, 30)}... (${data.literal})</td>
+                            <td class="px-3 py-2 text-center">
+                                <span class="px-2 py-0.5 rounded-full text-xs ${colorClass}">${data.demeritos}</span>
+                            </td>
+                            <td class="px-3 py-2 text-xs">${data.informe.substring(0, 50)}...</td>
+                            <td class="px-3 py-2 text-xs">${fechaHoraOcurrencia}</td>
+                        </tr>
+                    `;
+                    historialBody.innerHTML += row;
+                });
+                
+                // 3. Generar la tabla de totales
+                const cadetesOrdenados = Object.keys(deméritosPorCadete).sort((a, b) => 
+                    deméritosPorCadete[b].totalDemeritos - deméritosPorCadete[a].totalDemeritos // Orden descendente por deméritos
+                );
+
+                cadetesOrdenados.forEach(cadete => {
+                    const data = deméritosPorCadete[cadete];
+                    const totalClass = data.totalDemeritos >= 50 ? 'bg-red-200 text-red-900 font-extrabold' : 'bg-gray-200 text-gray-800 font-bold';
+
+                    const row = `
+                        <tr class="border-b hover:bg-gray-100">
+                            <td class="px-3 py-2 font-semibold text-gray-900">${cadete}</td>
+                            <td class="px-3 py-2 text-center">${data.totalFaltas}</td>
+                            <td class="px-3 py-2 text-center">
+                                <span class="px-3 py-1 rounded-full text-sm ${totalClass}">${data.totalDemeritos}</span>
+                            </td>
+                        </tr>
+                    `;
+                    totalesBody.innerHTML += row;
+                });
+
+            }, (error) => {
+                console.error("Error al obtener datos de Firestore:", error);
+                loadingMessage.textContent = 'Error al cargar el historial.';
+                totalesLoading.textContent = 'Error al cargar los totales.';
+            });
+        }
+
+
+        // --- FUNCIONES DE LA CALCULADORA (RESTO) ---
+
+        function llenarSelectFaltas() {
+            const select = document.getElementById('falta-select');
+            
+            const categorias = {};
+            faltasData.forEach(falta => {
+                if (!categorias[falta.categoria]) {
+                    categorias[falta.categoria] = [];
+                }
+                categorias[falta.categoria].push(falta);
+            });
+
+            for (const categoria in categorias) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = categoria;
+                
+                categorias[categoria].forEach((falta, index) => {
+                    const option = document.createElement('option');
+                    option.value = index; 
+                    option.textContent = `(${falta.literal}) ${falta.descripcion.substring(0, 70)}...`;
+                    optgroup.appendChild(option);
+                });
+                select.appendChild(optgroup);
+            }
+        }
+
+
+        window.actualizarDemerito = function() {
+            const select = document.getElementById('falta-select');
+            const resultadoContainer = document.getElementById('resultado-container');
+            
+            const selectedIndex = select.value;
+
+            if (selectedIndex === "") {
+                resultadoContainer.classList.add('hidden');
+                return;
+            }
+
+            const falta = faltasData[selectedIndex];
+
+            document.getElementById('categoria-output').textContent = falta.categoria;
+            document.getElementById('literal-output').textContent = falta.literal;
+            
+            const demeritosOutput = document.getElementById('demeritos-output');
+            demeritosOutput.textContent = falta.demeritos;
+            
+            // Lógica de color simple para el estilo Forms
+            let textColor = 'text-gray-900';
+            if (falta.demeritos >= 20) {
+                textColor = 'text-red-600';
+            } else if (falta.demeritos >= 5) {
+                textColor = 'text-yellow-600';
+            } else {
+                textColor = 'text-green-600';
+            }
+            
+            demeritosOutput.className = `text-2xl font-extrabold ${textColor}`;
+
+            resultadoContainer.classList.remove('hidden');
+        }
+
+        // Llamadas iniciales
+        document.addEventListener('DOMContentLoaded', () => {
+            // Establecer la fecha y hora actual como valor por defecto para mayor comodidad
+            const today = new Date();
+            const dateString = today.toISOString().split('T')[0];
+            const timeString = today.toTimeString().split(':').slice(0, 2).join(':');
+            document.getElementById('falta-fecha').value = dateString;
+            document.getElementById('falta-hora').value = timeString;
+
+            llenarSelectFaltas();
+            initFirebase();
+        });
+        window.registrarFalta = registrarFalta; 
+    </script>
+</body>
+</html>
